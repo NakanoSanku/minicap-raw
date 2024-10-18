@@ -417,12 +417,13 @@ main(int argc, char* argv[]) {
       goto disaster;
     }
 
-    if (!encoder.encode(&frame, quality)) {
-      MCERROR("Unable to encode frame");
-      goto disaster;
-    }
+    // if (!encoder.encode(&frame, quality)) {
+    //   MCERROR("Unable to encode frame");
+    //   goto disaster;
+    // }
 
-    if (pumpf(STDOUT_FILENO, encoder.getEncodedData(), encoder.getEncodedSize()) < 0) {
+    if (pumpf(STDOUT_FILENO, (unsigned char *)frame.data, frame.size) < 0)
+    {
       MCERROR("Unable to output encoded frame data");
       goto disaster;
     }
@@ -506,20 +507,21 @@ main(int argc, char* argv[]) {
 
       haveFrame = true;
 
-      // Encode the frame.
-      if (!encoder.encode(&frame, quality)) {
-        MCERROR("Unable to encode frame");
-        goto disaster;
-      }
+      // // Encode the frame.
+      // if (!encoder.encode(&frame, quality)) {
+      //   MCERROR("Unable to encode frame");
+      //   goto disaster;
+      // }
 
-      // Push it out synchronously because it's fast and we don't care
-      // about other clients.
-      unsigned char* data = encoder.getEncodedData() - 4;
-      size_t size = encoder.getEncodedSize();
+      // // Push it out synchronously because it's fast and we don't care
+      // // about other clients.
+      // unsigned char* data = encoder.getEncodedData() - 4;
+      // size_t size = encoder.getEncodedSize();
 
-      putUInt32LE(data, size);
+      // putUInt32LE(data, size);
 
-      if (pumps(fd, data, size + 4) < 0) {
+      if (pumps(fd, (unsigned char *)frame.data, frame.size) < 0)
+      {
         break;
       }
 
