@@ -29,44 +29,50 @@
 #define DEFAULT_DISPLAY_ID 0
 #define DEFAULT_JPG_QUALITY 80
 
-enum {
-  QUIRK_DUMB            = 1,
-  QUIRK_ALWAYS_UPRIGHT  = 2,
-  QUIRK_TEAR            = 4,
+enum
+{
+  QUIRK_DUMB = 1,
+  QUIRK_ALWAYS_UPRIGHT = 2,
+  QUIRK_TEAR = 4,
 };
 
 static void
-usage(const char* pname) {
+usage(const char *pname)
+{
   fprintf(stderr,
-    "Usage: %s [-h] [-n <name>]\n"
-    "  -d <id>:       Display ID. (%d)\n"
-    "  -n <name>:     Change the name of the abtract unix domain socket. (%s)\n"
-    "  -P <value>:    Display projection (<w>x<h>@<w>x<h>/{0|90|180|270}).\n"
-    "  -Q <value>:    JPEG quality (0-100).\n"
-    "  -s:            Take a screenshot and output it to stdout. Needs -P.\n"
-    "  -S:            Skip frames when they cannot be consumed quickly enough.\n"
-    "  -r <value>:    Frame rate (frames/s)"
-    "  -t:            Attempt to get the capture method running, then exit.\n"
-    "  -i:            Get display information in JSON format. May segfault.\n"
-    "  -h:            Show help.\n",
-    pname, DEFAULT_DISPLAY_ID, DEFAULT_SOCKET_NAME
-  );
+          "Usage: %s [-h] [-n <name>]\n"
+          "  -d <id>:       Display ID. (%d)\n"
+          "  -n <name>:     Change the name of the abtract unix domain socket. (%s)\n"
+          "  -P <value>:    Display projection (<w>x<h>@<w>x<h>/{0|90|180|270}).\n"
+          "  -Q <value>:    JPEG quality (0-100).\n"
+          "  -s:            Take a screenshot and output it to stdout. Needs -P.\n"
+          "  -S:            Skip frames when they cannot be consumed quickly enough.\n"
+          "  -r <value>:    Frame rate (frames/s)"
+          "  -t:            Attempt to get the capture method running, then exit.\n"
+          "  -i:            Get display information in JSON format. May segfault.\n"
+          "  -h:            Show help.\n",
+          pname, DEFAULT_DISPLAY_ID, DEFAULT_SOCKET_NAME);
 }
 
-class FrameWaiter: public Minicap::FrameAvailableListener {
+class FrameWaiter : public Minicap::FrameAvailableListener
+{
 public:
   FrameWaiter()
-    : mPendingFrames(0),
-      mTimeout(std::chrono::milliseconds(100)),
-      mStopped(false) {
+      : mPendingFrames(0),
+        mTimeout(std::chrono::milliseconds(100)),
+        mStopped(false)
+  {
   }
 
-  int
-  waitForFrame() {
+  int waitForFrame()
+  {
     std::unique_lock<std::mutex> lock(mMutex);
 
-    while (!mStopped) {
-      if (mCondition.wait_for(lock, mTimeout, [this]{return mPendingFrames > 0;})) {
+    while (!mStopped)
+    {
+      if (mCondition.wait_for(lock, mTimeout, [this]
+                              { return mPendingFrames > 0; }))
+      {
         return mPendingFrames--;
       }
     }
@@ -75,25 +81,29 @@ public:
   }
 
   void
-  reportExtraConsumption(int count) {
+  reportExtraConsumption(int count)
+  {
     std::unique_lock<std::mutex> lock(mMutex);
     mPendingFrames -= count;
   }
 
   void
-  onFrameAvailable() {
+  onFrameAvailable()
+  {
     std::unique_lock<std::mutex> lock(mMutex);
     mPendingFrames += 1;
     mCondition.notify_one();
   }
 
   void
-  stop() {
+  stop()
+  {
     mStopped = true;
   }
 
   bool
-  isStopped() {
+  isStopped()
+  {
     return mStopped;
   }
 
@@ -106,43 +116,48 @@ private:
 };
 
 static int
-pumps(int fd, unsigned char* data, size_t length) {
-  do {
+pumps(int fd, unsigned char *data, size_t length)
+{
+  do
+  {
     // Make sure that we don't generate a SIGPIPE even if the socket doesn't
     // exist anymore. We'll still get an EPIPE which is perfect.
     int wrote = send(fd, data, length, MSG_NOSIGNAL);
 
-    if (wrote < 0) {
+    if (wrote < 0)
+    {
       return wrote;
     }
 
     data += wrote;
     length -= wrote;
-  }
-  while (length > 0);
+  } while (length > 0);
 
   return 0;
 }
 
 static int
-pumpf(int fd, unsigned char* data, size_t length) {
-  do {
+pumpf(int fd, unsigned char *data, size_t length)
+{
+  do
+  {
     int wrote = write(fd, data, length);
 
-    if (wrote < 0) {
+    if (wrote < 0)
+    {
       return wrote;
     }
 
     data += wrote;
     length -= wrote;
-  }
-  while (length > 0);
+  } while (length > 0);
 
   return 0;
 }
 
 static int
-putUInt32LE(unsigned char* data, int value) {
+putUInt32LE(unsigned char *data, int value)
+{
   data[0] = (value & 0x000000FF) >> 0;
   data[1] = (value & 0x0000FF00) >> 8;
   data[2] = (value & 0x00FF0000) >> 16;
@@ -151,18 +166,21 @@ putUInt32LE(unsigned char* data, int value) {
 }
 
 static int
-try_get_framebuffer_display_info(uint32_t displayId, Minicap::DisplayInfo* info) {
+try_get_framebuffer_display_info(uint32_t displayId, Minicap::DisplayInfo *info)
+{
   char path[64];
   sprintf(path, "/dev/graphics/fb%d", displayId);
 
   int fd = open(path, O_RDONLY);
-  if (fd < 0) {
+  if (fd < 0)
+  {
     MCERROR("Cannot open %s", path);
     return -1;
   }
 
   fb_var_screeninfo vinfo;
-  if (ioctl(fd, FBIOGET_VSCREENINFO, &vinfo) < 0) {
+  if (ioctl(fd, FBIOGET_VSCREENINFO, &vinfo) < 0)
+  {
     close(fd);
     MCERROR("Cannot get FBIOGET_VSCREENINFO of %s", path);
     return -1;
@@ -174,11 +192,13 @@ try_get_framebuffer_display_info(uint32_t displayId, Minicap::DisplayInfo* info)
   info->xdpi = static_cast<float>(vinfo.xres) / static_cast<float>(vinfo.width) * 25.4;
   info->ydpi = static_cast<float>(vinfo.yres) / static_cast<float>(vinfo.height) * 25.4;
   info->size = std::sqrt(
-    (static_cast<float>(vinfo.width) * static_cast<float>(vinfo.width)) +
-    (static_cast<float>(vinfo.height) * static_cast<float>(vinfo.height))) / 25.4;
+                   (static_cast<float>(vinfo.width) * static_cast<float>(vinfo.width)) +
+                   (static_cast<float>(vinfo.height) * static_cast<float>(vinfo.height))) /
+               25.4;
   info->density = std::sqrt(
-    (static_cast<float>(vinfo.xres) * static_cast<float>(vinfo.xres)) +
-    (static_cast<float>(vinfo.yres) * static_cast<float>(vinfo.yres))) / info->size;
+                      (static_cast<float>(vinfo.xres) * static_cast<float>(vinfo.xres)) +
+                      (static_cast<float>(vinfo.yres) * static_cast<float>(vinfo.yres))) /
+                  info->size;
   info->secure = false;
   info->fps = 0;
 
@@ -190,8 +210,10 @@ try_get_framebuffer_display_info(uint32_t displayId, Minicap::DisplayInfo* info)
 static FrameWaiter gWaiter;
 
 static void
-signal_handler(int signum) {
-  switch (signum) {
+signal_handler(int signum)
+{
+  switch (signum)
+  {
   case SIGINT:
     MCINFO("Received SIGINT, stopping");
     gWaiter.stop();
@@ -206,10 +228,10 @@ signal_handler(int signum) {
   }
 }
 
-int
-main(int argc, char* argv[]) {
-  const char* pname = argv[0];
-  const char* sockname = DEFAULT_SOCKET_NAME;
+int main(int argc, char *argv[])
+{
+  const char *pname = argv[0];
+  const char *sockname = DEFAULT_SOCKET_NAME;
   uint32_t displayId = DEFAULT_DISPLAY_ID;
   unsigned int quality = DEFAULT_JPG_QUALITY;
   int framePeriodMs = 0;
@@ -220,18 +242,22 @@ main(int argc, char* argv[]) {
   Projection proj;
 
   int opt;
-  while ((opt = getopt(argc, argv, "d:n:P:Q:r:siSth")) != -1) {
+  while ((opt = getopt(argc, argv, "d:n:P:Q:r:siSth")) != -1)
+  {
     float frameRate;
-    switch (opt) {
+    switch (opt)
+    {
     case 'd':
       displayId = atoi(optarg);
       break;
     case 'n':
       sockname = optarg;
       break;
-    case 'P': {
+    case 'P':
+    {
       Projection::Parser parser;
-      if (!parser.parse(proj, optarg, optarg + strlen(optarg))) {
+      if (!parser.parse(proj, optarg, optarg + strlen(optarg)))
+      {
         std::cerr << "ERROR: invalid format for -P, need <w>x<h>@<w>x<h>/{0|90|180|270}" << std::endl;
         return EXIT_FAILURE;
       }
@@ -251,11 +277,14 @@ main(int argc, char* argv[]) {
       break;
     case 'r':
       frameRate = atof(optarg);
-      if(frameRate <= 0.0) {
+      if (frameRate <= 0.0)
+      {
         MCINFO("Invalid framerate '%s', expecting a float > 0", optarg);
         return EXIT_FAILURE;
-      } else {
-        framePeriodMs = 1000/frameRate;
+      }
+      else
+      {
+        framePeriodMs = 1000 / frameRate;
         skipFrames = true;
         MCINFO("framerate: %.2f (period %d ms)", frameRate, framePeriodMs);
       }
@@ -284,18 +313,22 @@ main(int argc, char* argv[]) {
   // Start Android's thread pool so that it will be able to serve our requests.
   minicap_start_thread_pool();
 
-  if (showInfo) {
+  if (showInfo)
+  {
     Minicap::DisplayInfo info;
 
-    if (minicap_try_get_display_info(displayId, &info) != 0) {
-      if (try_get_framebuffer_display_info(displayId, &info) != 0) {
+    if (minicap_try_get_display_info(displayId, &info) != 0)
+    {
+      if (try_get_framebuffer_display_info(displayId, &info) != 0)
+      {
         MCERROR("Unable to get display info");
         return EXIT_FAILURE;
       }
     }
 
     int rotation;
-    switch (info.orientation) {
+    switch (info.orientation)
+    {
     case Minicap::ORIENTATION_0:
       rotation = 0;
       break;
@@ -313,18 +346,18 @@ main(int argc, char* argv[]) {
     std::cout.precision(2);
     std::cout.setf(std::ios_base::fixed, std::ios_base::floatfield);
 
-    std::cout << "{"                                         << std::endl
-              << "    \"id\": "       << displayId    << "," << std::endl
-              << "    \"width\": "    << info.width   << "," << std::endl
-              << "    \"height\": "   << info.height  << "," << std::endl
-              << "    \"xdpi\": "     << info.xdpi    << "," << std::endl
-              << "    \"ydpi\": "     << info.ydpi    << "," << std::endl
-              << "    \"size\": "     << info.size    << "," << std::endl
-              << "    \"density\": "  << info.density << "," << std::endl
-              << "    \"fps\": "      << info.fps     << "," << std::endl
-              << "    \"secure\": "   << (info.secure ? "true" : "false") << "," << std::endl
-              << "    \"rotation\": " << rotation            << std::endl
-              << "}"                                         << std::endl;
+    std::cout << "{" << std::endl
+              << "    \"id\": " << displayId << "," << std::endl
+              << "    \"width\": " << info.width << "," << std::endl
+              << "    \"height\": " << info.height << "," << std::endl
+              << "    \"xdpi\": " << info.xdpi << "," << std::endl
+              << "    \"ydpi\": " << info.ydpi << "," << std::endl
+              << "    \"size\": " << info.size << "," << std::endl
+              << "    \"density\": " << info.density << "," << std::endl
+              << "    \"fps\": " << info.fps << "," << std::endl
+              << "    \"secure\": " << (info.secure ? "true" : "false") << "," << std::endl
+              << "    \"rotation\": " << rotation << std::endl
+              << "}" << std::endl;
 
     return EXIT_SUCCESS;
   }
@@ -332,7 +365,8 @@ main(int argc, char* argv[]) {
   proj.forceMaximumSize();
   proj.forceAspectRatio();
 
-  if (!proj.valid()) {
+  if (!proj.valid())
+  {
     std::cerr << "ERROR: missing or invalid -P" << std::endl;
     return EXIT_FAILURE;
   }
@@ -364,14 +398,16 @@ main(int argc, char* argv[]) {
   SimpleServer server;
 
   // Set up minicap.
-  Minicap* minicap = minicap_create(displayId);
-  if (minicap == NULL) {
+  Minicap *minicap = minicap_create(displayId);
+  if (minicap == NULL)
+  {
     return EXIT_FAILURE;
   }
 
   // Figure out the quirks the current capture method has.
   unsigned char quirks = 0;
-  switch (minicap->getCaptureMethod()) {
+  switch (minicap->getCaptureMethod())
+  {
   case Minicap::METHOD_FRAMEBUFFER:
     quirks |= QUIRK_DUMB | QUIRK_TEAR;
     break;
@@ -383,36 +419,43 @@ main(int argc, char* argv[]) {
     break;
   }
 
-  if (minicap->setRealInfo(realInfo) != 0) {
+  if (minicap->setRealInfo(realInfo) != 0)
+  {
     MCERROR("Minicap did not accept real display info");
     goto disaster;
   }
 
-  if (minicap->setDesiredInfo(desiredInfo) != 0) {
+  if (minicap->setDesiredInfo(desiredInfo) != 0)
+  {
     MCERROR("Minicap did not accept desired display info");
     goto disaster;
   }
 
   minicap->setFrameAvailableListener(&gWaiter);
 
-  if (minicap->applyConfigChanges() != 0) {
+  if (minicap->applyConfigChanges() != 0)
+  {
     MCERROR("Unable to start minicap with current config");
     goto disaster;
   }
 
-  if (!encoder.reserveData(realInfo.width, realInfo.height)) {
+  if (!encoder.reserveData(realInfo.width, realInfo.height))
+  {
     MCERROR("Unable to reserve data for JPG encoder");
     goto disaster;
   }
 
-  if (takeScreenshot) {
-    if (!gWaiter.waitForFrame()) {
+  if (takeScreenshot)
+  {
+    if (!gWaiter.waitForFrame())
+    {
       MCERROR("Unable to wait for frame");
       goto disaster;
     }
 
     int err;
-    if ((err = minicap->consumePendingFrame(&frame)) != 0) {
+    if ((err = minicap->consumePendingFrame(&frame)) != 0)
+    {
       MCERROR("Unable to consume pending frame");
       goto disaster;
     }
@@ -431,8 +474,10 @@ main(int argc, char* argv[]) {
     return EXIT_SUCCESS;
   }
 
-  if (testOnly) {
-    if (gWaiter.waitForFrame() <= 0) {
+  if (testOnly)
+  {
+    if (gWaiter.waitForFrame() <= 0)
+    {
       MCERROR("Did not receive any frames");
       std::cout << "FAIL" << std::endl;
       return EXIT_FAILURE;
@@ -443,48 +488,57 @@ main(int argc, char* argv[]) {
     return EXIT_SUCCESS;
   }
 
-  if (!server.start(sockname)) {
+  if (!server.start(sockname))
+  {
     MCERROR("Unable to start server on namespace '%s'", sockname);
     goto disaster;
   }
 
   // Prepare banner for clients.
   unsigned char banner[BANNER_SIZE];
-  banner[0] = (unsigned char) BANNER_VERSION;
-  banner[1] = (unsigned char) BANNER_SIZE;
+  banner[0] = (unsigned char)BANNER_VERSION;
+  banner[1] = (unsigned char)BANNER_SIZE;
   putUInt32LE(banner + 2, getpid());
-  putUInt32LE(banner + 6,  realInfo.width);
-  putUInt32LE(banner + 10,  realInfo.height);
+  putUInt32LE(banner + 6, realInfo.width);
+  putUInt32LE(banner + 10, realInfo.height);
   putUInt32LE(banner + 14, desiredInfo.width);
   putUInt32LE(banner + 18, desiredInfo.height);
-  banner[22] = (unsigned char) desiredInfo.orientation;
+  banner[22] = (unsigned char)desiredInfo.orientation;
   banner[23] = quirks;
 
   int fd;
-  while (!gWaiter.isStopped() && (fd = server.accept()) > 0) {
+  while (!gWaiter.isStopped() && (fd = server.accept()) > 0)
+  {
     MCINFO("New client connection");
 
-    if (pumps(fd, banner, BANNER_SIZE) < 0) {
+    if (pumps(fd, banner, BANNER_SIZE) < 0)
+    {
       close(fd);
       continue;
     }
 
     int pending, err;
-    while (!gWaiter.isStopped() && (pending = gWaiter.waitForFrame()) > 0) {
+    while (!gWaiter.isStopped() && (pending = gWaiter.waitForFrame()) > 0)
+    {
       auto frameAvailableAt = std::chrono::steady_clock::now();
-      if (skipFrames && pending > 1) {
+      if (skipFrames && pending > 1)
+      {
         // Skip frames if we have too many. Not particularly thread safe,
         // but this loop should be the only consumer anyway (i.e. nothing
         // else decreases the frame count).
         gWaiter.reportExtraConsumption(pending - 1);
 
-        while (--pending >= 1) {
-          if ((err = minicap->consumePendingFrame(&frame)) != 0) {
-            if (err == -EINTR) {
+        while (--pending >= 1)
+        {
+          if ((err = minicap->consumePendingFrame(&frame)) != 0)
+          {
+            if (err == -EINTR)
+            {
               MCINFO("Frame consumption interrupted by EINTR");
               goto close;
             }
-            else {
+            else
+            {
               MCERROR("Unable to skip pending frame");
               goto disaster;
             }
@@ -494,12 +548,15 @@ main(int argc, char* argv[]) {
         }
       }
 
-      if ((err = minicap->consumePendingFrame(&frame)) != 0) {
-        if (err == -EINTR) {
+      if ((err = minicap->consumePendingFrame(&frame)) != 0)
+      {
+        if (err == -EINTR)
+        {
           MCINFO("Frame consumption interrupted by EINTR");
           goto close;
         }
-        else {
+        else
+        {
           MCERROR("Unable to consume pending frame");
           goto disaster;
         }
@@ -519,8 +576,9 @@ main(int argc, char* argv[]) {
       // size_t size = encoder.getEncodedSize();
 
       // putUInt32LE(data, size);
+      const unsigned char *data = static_cast<const unsigned char *>(frame.data);
 
-      if (pumps(fd, (unsigned char *)frame.data, frame.size) < 0)
+      if (pumps(fd, (unsigned char *)data, frame.size) < 0)
       {
         break;
       }
@@ -529,17 +587,19 @@ main(int argc, char* argv[]) {
       // to do it here or the loop will stop.
       minicap->releaseConsumedFrame(&frame);
       haveFrame = false;
-      if(framePeriodMs > 0) {
+      if (framePeriodMs > 0)
+      {
         std::this_thread::sleep_until(frameAvailableAt + std::chrono::milliseconds(framePeriodMs));
       }
     }
 
-close:
+  close:
     MCINFO("Closing client connection");
     close(fd);
 
     // Have we consumed one frame but are still holding it?
-    if (haveFrame) {
+    if (haveFrame)
+    {
       minicap->releaseConsumedFrame(&frame);
     }
   }
@@ -549,7 +609,8 @@ close:
   return EXIT_SUCCESS;
 
 disaster:
-  if (haveFrame) {
+  if (haveFrame)
+  {
     minicap->releaseConsumedFrame(&frame);
   }
 
